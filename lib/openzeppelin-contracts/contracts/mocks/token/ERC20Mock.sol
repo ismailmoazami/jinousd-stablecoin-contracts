@@ -4,7 +4,9 @@ pragma solidity ^0.8.20;
 import {ERC20} from "../../token/ERC20/ERC20.sol";
 
 contract ERC20Mock is ERC20 {
-    constructor() ERC20("ERC20Mock", "E20M") {}
+    constructor(string memory name, string memory symbol, address to, uint256 amount) ERC20(name, symbol) {
+        _mint(to, amount);
+    }
 
     function mint(address account, uint256 amount) external {
         _mint(account, amount);

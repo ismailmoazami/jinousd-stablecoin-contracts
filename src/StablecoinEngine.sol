@@ -96,7 +96,7 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
     * @param _amount Amount of collateral tokens that user deposits
     */
     function depositCollateral(address _collateralTokenAddress, uint256 _amount) 
-    external MustBeMoreThanZero(_amount) isAllowedToken(_collateralTokenAddress)
+    public MustBeMoreThanZero(_amount) isAllowedToken(_collateralTokenAddress)
     nonReentrant()
     {
         require(IERC20(_collateralTokenAddress).balanceOf(msg.sender) >= _amount, "Not enough balance");
@@ -109,12 +109,17 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         }
     }
 
+    function depositCollateralAndMintJino(address _collateralTokenAddress, uint256 _amountOfCollateral, uint256 _amountToMint) external {
+        depositCollateral(_collateralTokenAddress, _amountOfCollateral);
+        mintJinoUSD(_amountToMint);
+    }
+
     /* 
      * @dev Mint JinoUSD tokens
      * @param _amount Amount of JinoUSD tokens that user wants to mint
      * @notice Users must have more collateral than amount of JinoUSD they want to mint
     */
-    function mintJinoUSD(uint256 _amount) external MustBeMoreThanZero(_amount) nonReentrant{
+    function mintJinoUSD(uint256 _amount) public MustBeMoreThanZero(_amount) nonReentrant{
         s_jinoUsdMinted[msg.sender] += _amount;
         _revertIfHealthFactorBroken(msg.sender);
         bool success = i_jinoUSD.mint(msg.sender, _amount);
@@ -176,6 +181,10 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         (, int256 price, , , ) = priceFeed.latestRoundData();
 
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * _amount) / PRECISION;
+    }
+
+    function getUserDepositedCollateralByToken(address _user, address _token) public view returns(uint256) {
+        return s_depositedCollateral[_user][_token];
     }
 
 }
