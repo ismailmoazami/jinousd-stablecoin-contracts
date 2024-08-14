@@ -30,7 +30,7 @@ contract EngineTest is Test {
         ERC20Mock(wBtc).mint(USER, STARTING_BALANCE);
     }
 
-    function testGetUsdValue() external {
+    function testGetUsdValue() external view{
         uint amount = 10e18;
         uint256 expectedValue = 550000e18;
 
@@ -46,8 +46,9 @@ contract EngineTest is Test {
 
         ERC20Mock(wBtc).approve(address(engine), amount);
         engine.depositCollateral(wBtc, amount);
-        vm.stopPrank();
+        vm.stopPrank();        
         uint256 userDeposited = engine.getUserDepositedCollateralByToken(USER, wBtc);
+
         assert(userDeposited == amount);
 
     }
@@ -60,5 +61,24 @@ contract EngineTest is Test {
         engine.depositCollateral(wBtc, 0);
         vm.stopPrank();
 
+    }
+
+    function testCanWithdrawCorrectly() external {
+        uint256 amount = 15e18;
+        uint256 amountToWithdraw = 3e18;
+        uint256 amountOfJinoToMint = 400000e18;
+
+        vm.startPrank(USER);
+        ERC20Mock(wBtc).approve(address(engine), amount);
+        engine.depositCollateral(wBtc, amount);
+        engine.mintJinoUSD(amountOfJinoToMint);
+        jino.approve(address(engine), amountOfJinoToMint);
+
+        engine.withdrawCollateral(wBtc, amountToWithdraw);
+
+        vm.stopPrank();
+        uint256 expected = amount - amountToWithdraw;
+        uint256 collateralLeft = engine.getUserDepositedCollateralByToken(USER, wBtc);
+        assert(collateralLeft == expected);
     }
 }
