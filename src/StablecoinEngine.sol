@@ -41,6 +41,7 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
 
     event CollateralDeposited(address indexed user, address indexed collateralToken, uint256 tokenAmount);
     event CollateralWithdrawn(address indexed fromWithdrawn, address indexed toWithdrawn, address indexed collateralAddress, uint256 amountToWithdraw);
+    
     //////////////////
     // Errors      //
     ////////////////
@@ -53,6 +54,7 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
     error StablecoinEngine__MintFailed();
     error StablecoinEngine__HealthFactorIsOk();
     error StablecoinEngine__HealthFactorNotImproved();
+    error StablecoinEngine__AddressNotZero();
 
     /////////////////
     // Modifiers   //
@@ -82,6 +84,14 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         }
 
         for(uint256 i=0; i < _tokenAddresses.length; i++) {
+            if(_tokenAddresses[i] == address(0)) {
+                revert StablecoinEngine__AddressNotZero();
+            }
+            
+            if(_priceFeeds[i] == address(0)) {
+                revert StablecoinEngine__AddressNotZero();
+            }
+
             s_tokensPriceFeed[_tokenAddresses[i]] = _priceFeeds[i];
             s_allowedTokens[_tokenAddresses[i]] = true;
             s_allowedTokensList.push(_tokenAddresses[i]);
@@ -157,9 +167,17 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
     function burnJino(uint256 _amount) MustBeMoreThanZero(_amount) public nonReentrant{
         
         _burnJino(_amount, msg.sender, msg.sender);
-
+        _revertIfHealthFactorBroken(msg.sender);
+        
     }
 
+    /* 
+    * @param _collateralAddress contract address of the token that user deposits (can be WETH or WBTC)
+    * @param _user Address of the user that is being liquidated
+    * @param _amountOfDebt Amount of JinoUSD tokens that user owes
+    * @notice Liquidator gets a bonus for liquidating a user
+    * @notice Liquidator must have a health factor of more than 1
+    */
     function liquidate(address _collateralAddress, address _user, uint256 _amountOfDebt) external 
     MustBeMoreThanZero(_amountOfDebt)
     nonReentrant
@@ -186,7 +204,9 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
     }
 
     function addAllowedToken(address _tokenAddress) external onlyOwner{
-        require(_tokenAddress != address(0));
+        if(_tokenAddress == address(0)) {
+            revert StablecoinEngine__AddressNotZero();
+        }
         s_allowedTokens[_tokenAddress] = true;
     }
 
@@ -262,10 +282,19 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         return s_depositedCollateral[_user][_token];
     }
 
-    function getTokenAmountFromUsd(address _token, uint256 _amount) public view returns(uint256) {
+    function getUserJinoMinted(address _user) public view returns(uint256) {
+        return s_jinoUsdMinted[_user];
+    }
+
+    function getTokenAmountFromUsd(address _token, uint256 _usdAmount) public view returns(uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_tokensPriceFeed[_token]);
         (, int256 price, , , ) = priceFeed.latestRoundData();
-        return (_amount * PRECISION) / (uint256(price) * ADDITIONAL_FEED_PRECISION);
+        return (_usdAmount * PRECISION) / (uint256(price) * ADDITIONAL_FEED_PRECISION);
     }
+
+    function getUserInfo(address _user) external view returns(uint256, uint256) {
+        (uint256 totalJinoMintedByUser, uint256 totalCollateralValueOfUser) = _getUserInfo(_user);
+        return (totalJinoMintedByUser, totalCollateralValueOfUser);
+    } 
 
 }
