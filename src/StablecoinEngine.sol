@@ -167,7 +167,6 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
     function burnJino(uint256 _amount) MustBeMoreThanZero(_amount) public nonReentrant{
         
         _burnJino(_amount, msg.sender, msg.sender);
-        _revertIfHealthFactorBroken(msg.sender);
         
     }
 
@@ -190,6 +189,12 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         uint256 bonusCollateral = (tokenAmountFromDebtCovered * LIQUIDATION_BONUS) / THRESHOLD_PRECISION;
 
         uint256 totalTokensToWithdraw = tokenAmountFromDebtCovered + bonusCollateral;
+        uint256 userTotalCollateral = s_depositedCollateral[_user][_collateralAddress];
+
+        if(totalTokensToWithdraw > userTotalCollateral) {
+            totalTokensToWithdraw = userTotalCollateral;
+        }
+        
 
         _withdrawCollateral(_collateralAddress, totalTokensToWithdraw, _user, msg.sender);
         _burnJino(_amountOfDebt, _user, msg.sender);
@@ -246,6 +251,9 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
     function _healthFactor(address _user) private view returns(uint256) {
         (uint256 totalJinoMintedByUser, uint256 totalCollateralValueOfUser) = _getUserInfo(_user);
         uint256 collateralAdjustedValue = (totalCollateralValueOfUser * LIQUIDATION_THRESHOLD) / THRESHOLD_PRECISION;
+        if(totalJinoMintedByUser == 0) {
+            return type(uint256).max;
+        }
         return (collateralAdjustedValue * PRECISION) / totalJinoMintedByUser;
     }
 
@@ -296,5 +304,9 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         (uint256 totalJinoMintedByUser, uint256 totalCollateralValueOfUser) = _getUserInfo(_user);
         return (totalJinoMintedByUser, totalCollateralValueOfUser);
     } 
+
+    function healthFactor(address _user) external view returns(uint256) {
+        return _healthFactor(_user);
+    }
 
 }

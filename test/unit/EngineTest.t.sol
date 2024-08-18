@@ -7,6 +7,7 @@ import {JinoUSD} from "../../src/JinoUSD.sol";
 import {DeployEngine} from "script/DeployEngine.s.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {MockV3Aggregator} from "test/mocks/MockV3Aggregator.sol";
 
 
 contract EngineTest is Test {
@@ -27,6 +28,7 @@ contract EngineTest is Test {
     address[] public tokenAddresses;
 
     address USER = makeAddr('user');
+    address LIQUIDATOR = makeAddr('liquidator');
 
     uint256 constant private STARTING_BALANCE = 150e18;
     uint256 constant private PRECISION = 1e18;
@@ -37,6 +39,7 @@ contract EngineTest is Test {
         (engine, jino, config) = deployer.run();
         (wBtcPriceFeed, , wBtc, , ) = config.activeNetworkConfig();
         ERC20Mock(wBtc).mint(USER, STARTING_BALANCE);
+        ERC20Mock(wBtc).mint(LIQUIDATOR, STARTING_BALANCE);
     }
 
     function testGetUsdValue() external view{
@@ -54,7 +57,7 @@ contract EngineTest is Test {
 
     modifier depositCollateral() { 
         vm.startPrank(USER);
-        uint amount = 15e18;
+        uint amount = 10e18;
 
         ERC20Mock(wBtc).approve(address(engine), amount);
         engine.depositCollateral(wBtc, amount);
@@ -100,7 +103,7 @@ contract EngineTest is Test {
         (uint256 totalJinoMintedByUser, uint256 totalCollateralValue) = engine.getUserInfo(USER);
 
         uint256 expectedJinoMinted = 0;
-        uint256 expectedCollateralValue = 15e18 * 55000;
+        uint256 expectedCollateralValue = 10e18 * 55000;
 
         assert(totalJinoMintedByUser == expectedJinoMinted);
         assert(totalCollateralValue == expectedCollateralValue);
@@ -138,7 +141,7 @@ contract EngineTest is Test {
 
     function testCanEmitCollateralWithdrawnEvent() external depositCollateral {
         uint256 amountToWithdraw = 3e18;
-        uint256 amountOfJinoToMint = 300000e18;
+        uint256 amountOfJinoToMint = 30000e18;
         vm.startPrank(USER);
 
         engine.mintJinoUSD(amountOfJinoToMint);
@@ -151,8 +154,67 @@ contract EngineTest is Test {
     }
 
     // Mint tests 
-    function testCanMintJino() external {
+    function testCanMintJino() external depositCollateral{
         
+        uint256 amountToMint = 10000e18;
+        vm.startPrank(USER);
+        engine.mintJinoUSD(amountToMint);
+        vm.stopPrank();
+
+        uint256 mintedAmount = engine.getUserJinoMinted(USER);
+        assert(mintedAmount == amountToMint);
+
+    }
+
+    function testCantMintIfHealthFactorIsNotOk() external depositCollateral{
+        uint256 amountToMint = 500_000e18;
+        uint256 expectedHealthFactor = 0.55e18;
+        vm.startPrank(USER);
+        
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                StablecoinEngine.StablecoinEngine__HealthFactorTooLow.selector,
+                expectedHealthFactor
+                ));
+        engine.mintJinoUSD(amountToMint);
+        vm.stopPrank();
+    }
+
+    // Burn tests 
+    function testCanBurnJino() external depositCollateral{
+        
+        uint256 amountToMint = 10000e18;
+        vm.startPrank(USER);
+        engine.mintJinoUSD(amountToMint);
+        jino.approve(address(engine), amountToMint);
+        engine.burnJino(10000e18);
+        vm.stopPrank();
+
+        uint256 mintedAmount = engine.getUserJinoMinted(USER);
+        assert(mintedAmount == 0);
+
+    }
+
+    // Liquidations tests
+
+    function testCanLiquidateUser() external depositCollateral{
+        uint256 amountToMint = 200000e18;
+        vm.startPrank(USER);
+        engine.mintJinoUSD(amountToMint); 
+        vm.stopPrank();
+        
+        vm.startPrank(LIQUIDATOR); 
+
+        ERC20Mock(wBtc).approve(address(engine), 40e18);
+        engine.depositCollateral(wBtc, 40e18);
+        engine.mintJinoUSD(amountToMint * 2);
+        MockV3Aggregator(wBtcPriceFeed).updateAnswer(20000e8);
+        jino.approve(address(engine), amountToMint);
+        engine.liquidate(wBtc, USER, amountToMint);
+        vm.stopPrank();
+
+        uint256 userJinoMinted = engine.getUserJinoMinted(USER);
+        assert(userJinoMinted == 0);
     }
 
     // Constructor tests
