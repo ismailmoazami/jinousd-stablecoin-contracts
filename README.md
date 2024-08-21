@@ -1,66 +1,67 @@
-## Foundry
+# Jino Stablecoin Engine
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This project implements a stablecoin system called Jino, featuring an overcollateralized stablecoin (JinoUSD) and its management engine.
 
-Foundry consists of:
+## Overview
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+The Jino Stablecoin Engine is a Solidity-based smart contract system that allows users to mint JinoUSD tokens by depositing collateral in the form of other cryptocurrencies (currently supporting WETH and WBTC). The system ensures that the stablecoin remains overcollateralized to maintain its stability and value.
 
-## Documentation
+## Key Features
 
-https://book.getfoundry.sh/
+- Deposit collateral (WETH, WBTC)
+- Mint JinoUSD tokens
+- Withdraw collateral
+- Liquidation mechanism to maintain system health
+- Oracle integration for real-time price feeds
 
-## Usage
+## Smart Contracts
 
-### Build
+- `StablecoinEngine.sol`: Main contract managing collateral, minting, and system parameters
+- `JinoUSD.sol`: ERC20 token contract for the JinoUSD stablecoin
+- `OracleLib.sol`: Library for handling price feed data from Chainlink oracles
 
-```shell
-$ forge build
-```
+## Testing
 
-### Test
+The project includes comprehensive tests, including:
 
-```shell
-$ forge test
-```
+- Unit tests for individual contract functions
+- Integration tests for complex interactions
+- Invariant tests to ensure system-wide properties are maintained
 
-### Format
+Tests are written using the Foundry framework and can be found in the `test/` directory.
 
-```shell
-$ forge fmt
-```
+## Setup and Deployment
 
-### Gas Snapshots
+1. Install dependencies:
+   ```
+   forge install
+   ```
 
-```shell
-$ forge snapshot
-```
+2. Compile contracts:
+   ```
+   forge build
+   ```
 
-### Anvil
+3. Run tests:
+   ```
+   forge test
+   ```
 
-```shell
-$ anvil
-```
+4. Deploy (adjust network and parameters as needed):
+   ```
+   forge script script/DeployEngine.s.sol:DeployEngine --rpc-url $RPC_URL --broadcast --verify -vvvv
+   ```
 
-### Deploy
+## Security Considerations
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
+- The system relies on accurate price feeds. Ensure oracles are reliable and up-to-date.
+- The contract includes reentrancy guards and checks for common vulnerabilities.
+- Regular audits are recommended to ensure the system's security as it evolves.
 
-### Cast
+## Contributing
 
-```shell
-$ cast <subcommand>
-```
+Contributions are welcome! Please fork the repository and submit a pull request with your proposed changes.
 
-### Help
+## License
 
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+This project is licensed under the MIT License.
