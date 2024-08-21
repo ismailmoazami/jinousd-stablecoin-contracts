@@ -20,7 +20,7 @@ contract JinoUSD is ERC20Burnable, Ownable{
     error Jino__AddressNotZero();
 
     constructor() ERC20("JinoUSD", "JUSD") Ownable(msg.sender){
-        _mint(msg.sender, 1000 * 10 ** decimals());
+        
     }
 
     function burn(uint256 _amount) public override onlyOwner{

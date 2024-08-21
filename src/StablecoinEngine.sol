@@ -6,6 +6,7 @@ import {JinoUSD} from "src/JinoUSD.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import {OracleLib} from "src/libraries/OracleLib.sol";
 
 /* 
  * @title StablecoinEngine
@@ -55,6 +56,15 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
     error StablecoinEngine__HealthFactorIsOk();
     error StablecoinEngine__HealthFactorNotImproved();
     error StablecoinEngine__AddressNotZero();
+    error StablecoinEngine__InsufficientCollateral();
+
+        
+    ////////////////////
+    //    Types      //
+    //////////////////
+
+    using OracleLib for AggregatorV3Interface;
+    
 
     /////////////////
     // Modifiers   //
@@ -105,6 +115,7 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
     /////////////////////////
 
     /* 
+    * @dev Deposit collateral tokens
     * @param _collateralTokenAddress contract address of the token that user deposits (can be WETH or WBTC)
     * @param _amount Amount of collateral tokens that user deposits
     */
@@ -133,6 +144,11 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         mintJinoUSD(_amountToMint);
     }
 
+    /* 
+    * @dev Withdraw collateral tokens
+    * @param _collateralAddress contract address of the token that user withdraws (can be WETH or WBTC)
+    * @param _amountToWithdraw Amount of collateral tokens that user withdraws
+    */
     function withdrawCollateral(address _collateralAddress, uint256 _amountToWithdraw) 
     public 
     MustBeMoreThanZero(_amountToWithdraw)
@@ -143,6 +159,12 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         _revertIfHealthFactorBroken(msg.sender);
     }
 
+    /* 
+    * @dev Withdraw collateral tokens for JinoUSD
+    * @param _collateralAddress contract address of the token that user withdraws (can be WETH or WBTC)
+    * @param _amountOfCollateralToWithdraw Amount of collateral tokens that user withdraws
+    * @param amountOfJinoToBurn Amount of JinoUSD tokens that user wants to burn
+    */
     function withdrawCollateralForJino(address _collateralAddress, uint256 _amountOfCollateralToWithdraw, uint256 amountOfJinoToBurn) 
     public
     {
@@ -164,6 +186,11 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         }
     }
 
+    /* 
+    * @dev Burn JinoUSD tokens
+    * @param _amount Amount of JinoUSD tokens that user wants to burn
+    * @notice Users must have more collateral than amount of JinoUSD they want to burn
+    */
     function burnJino(uint256 _amount) MustBeMoreThanZero(_amount) public nonReentrant{
         
         _burnJino(_amount, msg.sender, msg.sender);
@@ -208,6 +235,11 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
 
     }
 
+    /* 
+    * @dev Add a new allowed token
+    * @param _tokenAddress contract address of the token that user wants to add
+    * @notice Only owner can add a new token
+    */
     function addAllowedToken(address _tokenAddress) external onlyOwner{
         if(_tokenAddress == address(0)) {
             revert StablecoinEngine__AddressNotZero();
@@ -221,6 +253,10 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
     ////////////////////////////
 
     function _withdrawCollateral(address _collateralAddress, uint256 _amountToWithdraw, address _from, address _to) internal {
+        uint256 currentCollateral = s_depositedCollateral[_from][_collateralAddress];
+        if (currentCollateral < _amountToWithdraw) {
+            revert StablecoinEngine__InsufficientCollateral();
+        }
         s_depositedCollateral[_from][_collateralAddress] -= _amountToWithdraw;
         emit CollateralWithdrawn(_from, _to, _collateralAddress, _amountToWithdraw);
         bool success = IERC20(_collateralAddress).transfer(_to, _amountToWithdraw);
@@ -279,9 +315,14 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
         return totalValueInUSD;
     }
 
+    /*
+     * @dev Return the value of the collateral in USD
+     * @param _token Address of the collateral token
+     * @param _amount Amount of the collateral token
+    */
     function getUsdValue(address _token, uint256 _amount) public view returns(uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_tokensPriceFeed[_token]);
-        (, int256 price, , , ) = priceFeed.latestRoundData();
+        (, int256 price, , , ) = priceFeed.staleCheckLatestRoundData();
 
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * _amount) / PRECISION;
     }
@@ -296,7 +337,7 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
 
     function getTokenAmountFromUsd(address _token, uint256 _usdAmount) public view returns(uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_tokensPriceFeed[_token]);
-        (, int256 price, , , ) = priceFeed.latestRoundData();
+        (, int256 price, , , ) = priceFeed.staleCheckLatestRoundData();
         return (_usdAmount * PRECISION) / (uint256(price) * ADDITIONAL_FEED_PRECISION);
     }
 
@@ -307,6 +348,14 @@ contract StablecoinEngine is Ownable, ReentrancyGuard {
 
     function healthFactor(address _user) external view returns(uint256) {
         return _healthFactor(_user);
+    }
+
+    function getAllowedTokens() external view returns(address[] memory) {
+        return s_allowedTokensList;
+    }
+
+    function getPriceFeed(address _token) external view returns(address) {
+        return s_tokensPriceFeed[_token];
     }
 
 }

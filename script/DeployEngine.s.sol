@@ -3,7 +3,6 @@ pragma solidity 0.8.20;
 
 import {Script} from "lib/forge-std/src/Script.sol";
 import {StablecoinEngine} from "src/StablecoinEngine.sol";
-import {DevOpsTools} from "@devops_tools/src/DevOpsTools.sol";
 import {JinoUSD} from "src/JinoUSD.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
 
